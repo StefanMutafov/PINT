@@ -40,8 +40,8 @@ int8_t validSPO2;
 int32_t heartRate;
 int8_t validHeartRate;
 
-int32_t lastSPO2 = -1;
-int32_t lastHeartRate = -1;
+//int32_t lastSPO2 = -1;
+//int32_t lastHeartRate = -1;
 unsigned long prevTime = 0;
 
 void setup() {
@@ -55,7 +55,7 @@ void setup() {
         return;
     }
 
-    // Oxygen/BPM Sensor settings
+    // MAX30102 Sensor settings
     byte ledBrightness = 65;
     byte sampleAverage = 32;
     byte ledMode = 2;
@@ -134,7 +134,7 @@ void loop() {
 
             // Prepare data for PLX Continuous Measurement (SPO2 + HR)
             uint8_t plxData[5];  // 1 byte for flags, 2 bytes for SPO2 value, 2 bytes for Heart Rate
-            plxData[0] = 0b00000000;  // Flags (optional)
+            plxData[0] = 0b00000000;  // Flags
 
             // Use the lower 16 bits of the 32-bit int32_t spo2 value
             uint16_t spo2Value = (uint16_t)(spo2 & 0xFFFF); // Extract lower 16 bits of spo2
@@ -150,15 +150,9 @@ void loop() {
 
             pPLXCharacteristic->setValue(plxData, sizeof(plxData));  // Set combined data
             pPLXCharacteristic->notify();  // Send data
-
-            Serial.print("Sent: ");
-            Serial.print("HR: ");
-            Serial.print(heartRate);
-            Serial.print(", SPO2: ");
-            Serial.println(spo2);
         }
 
-        lastSPO2 = spo2;
-        lastHeartRate = heartRate;
+//        lastSPO2 = spo2;
+//        lastHeartRate = heartRate;
     }
 }
