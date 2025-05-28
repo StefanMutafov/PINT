@@ -10,12 +10,19 @@ static unsigned long lastStepTime = 0;
 static float lastMagnitude = 0;
 static const float stepThreshold = 1.2;
 static const int   stepDelay     = 350;
-static int         stepCount     = 0;
+volatile int         stepCount     = 0;
 
 // fall detection state
 static bool     stillnessTimerRunning = false;
 static const int stillnessDuration     = 2000;
 static unsigned long stillnessStartTime=0;
+
+
+// at bottom, add:
+int getStepCount() {
+    return stepCount;
+}
+
 
 static void calibrateGyro() {
     const int readings = 100;

@@ -9,4 +9,8 @@ void initMotion();
 // call each loop; returns current total steps
 int updateMotion();
 
+// after your other declarations
+int  getStepCount();
+
+
 #endif // MOTION_SENSOR_H
