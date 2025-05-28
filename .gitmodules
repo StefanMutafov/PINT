@@ -1,0 +1,3 @@
+[submodule "vital_sync"]
+	path = vital_sync
+	url = git@github.com:dungphan294/vital_sync.git
