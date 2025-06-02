@@ -2,8 +2,10 @@
 #include "PulseOxy.h"
 #include "BLEPlx.h"
 #include "MotionSensor.h"
+#include "FileStorage.h"
 
 #define BLE_TIMEOUT 5000
+#define SD_TIMEOUT 10000
 #define BUTTON_PIN 2 // Button for starting and stopping session
 
 //   Shared globals for SpO2/HR (written by pulseTask)
@@ -50,7 +52,6 @@ bool buttonPressed() {
 
 //motionTask
 void motionTask(void* pv) {
-    initMotion();
     while (true) {
         updateMotion();
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -59,7 +60,6 @@ void motionTask(void* pv) {
 
 //pulseTask
 void pulseTask(void* pv) {
-    initPulseOxy();
     while (true) {
         int32_t spo2, hr;
         bool    okSpO2, okHR;
@@ -82,7 +82,17 @@ void pulseTask(void* pv) {
 void setup() {
     Serial.begin(115200);
 
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+   // pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+    // 1) Initialize SD card & SPI
+    if (!initFileStorage()) {
+        // SD init failed; handle error or halt
+        while (1) delay(1000);
+    }
+
+    // 2) Start the RTC
+    RTC_setup();
+
 
     // Initialize sensors & BLE
     initPulseOxy();
@@ -117,24 +127,24 @@ int start_steps = 0;
 
 void loop() {
     static unsigned long lastNotifyTime = 0;
-    //static unsigned long lastSDRecord = 0;
+    static unsigned long lastSDRecord = 0;
 
 
     //Get current step count
     int steps = getStepCount();
 
-
-    if (buttonPressed()) {
-        if(inSession){
-            inSession = false;
-            int sessionSteps = steps - start_steps;
-            Serial.printf("Session ended! Total steps: %d\n", sessionSteps);
-        }else{
-            inSession = true;
-            Serial.println("Session started!");
-            start_steps = steps;
-        }
-    }
+//
+//    if (buttonPressed()) {
+//        if(inSession){
+//            inSession = false;
+//            int sessionSteps = steps - start_steps;
+//            Serial.printf("Session ended! Total steps: %d\n", sessionSteps);
+//        }else{
+//            inSession = true;
+//            Serial.println("Session started!");
+//            start_steps = steps;
+//        }
+//    }
 
     //If pulseTask just finished a read, print
     if (g_pulseUpdated) {
@@ -160,10 +170,12 @@ void loop() {
         }
     }
 
-    //    now = millis();
-    //    if(now - lastSDRecord >= SD_TIMEOUT){
-    //        //HERE SAVE DATA TO SD CARD, ONCE EVERY SD_TIMEOUT
-    //    }
+        now = millis();
+        if(now - lastSDRecord >= SD_TIMEOUT){
+            lastSDRecord = now;
+            //HERE SAVE DATA TO SD CARD, ONCE EVERY SD_TIMEOUT
+            write_file(g_hr, g_spo2, steps, inSession);
+        }
 
     delay(10);
 }
