@@ -8,7 +8,7 @@
 #define SD_TIMEOUT 10000
 #define BUTTON_PIN 2 // Button for starting and stopping session
 
-//   Shared globals for SpO2/HR (written by pulseTask)
+//   Shared     globals for SpO2/HR (written by pulseTask)
 //   g_spo2/g_hr hold whatever the last valid reading was.
 //   g_validPulse tells us if that reading was valid.
 //   g_pulseUpdated flips to true exactly when pulseTask finishes a read.
