@@ -2,7 +2,7 @@
 #include "PulseOxy.h"
 #include "BLEPlx.h"
 #include "MotionSensor.h"
-
+#include "sdCard.h"
 #define BLE_TIMEOUT 5000
 
 //Shared globals for SpO2/HR (updated by pulseTask)
@@ -55,7 +55,8 @@ void setup() {
     initPulseOxy();
     initMotion();
     initBLE();
-
+    SD_setup();
+    RTC_setup();
     // Create motionTask pinned to Core 1:
     xTaskCreatePinnedToCore(
             motionTask,
