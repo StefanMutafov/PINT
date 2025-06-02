@@ -4,6 +4,7 @@
 #include "MotionSensor.h"
 
 #define BLE_TIMEOUT 5000
+#define BUTTON_PIN 2 // Button for starting and stopping session
 
 //   Shared globals for SpO2/HR (written by pulseTask)
 //   g_spo2/g_hr hold whatever the last valid reading was.
@@ -14,9 +15,38 @@ volatile int32_t  g_hr           = 0;
 volatile bool     g_validPulse   = false;
 volatile bool     g_pulseUpdated = false;
 
+bool inSession = false; // True is the user is in a training session
 
 TaskHandle_t motionTaskHandle = nullptr;
 TaskHandle_t pulseTaskHandle  = nullptr;
+
+// Detect button presses
+bool buttonPressed() {
+    static int           lastRaw       = HIGH;   // last raw reading
+    static int           debounced     = HIGH;   // last accepted state
+    static unsigned long lastDebounce  = 0;      // when raw last changed
+    const unsigned long  DEBOUNCE_DELAY = 50;
+
+    int raw = digitalRead(BUTTON_PIN);
+
+    if (raw != lastRaw) {
+        lastDebounce = millis();
+    }
+
+    if (millis() - lastDebounce > DEBOUNCE_DELAY) {
+        if (raw != debounced) {
+            debounced = raw;
+
+            if (debounced == LOW) {
+                lastRaw = raw;
+                return true;
+            }
+        }
+    }
+
+    lastRaw = raw;
+    return false;
+}
 
 //motionTask
 void motionTask(void* pv) {
@@ -49,9 +79,10 @@ void pulseTask(void* pv) {
     }
 }
 
-
 void setup() {
     Serial.begin(115200);
+
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     // Initialize sensors & BLE
     initPulseOxy();
@@ -82,12 +113,28 @@ void setup() {
 }
 
 
+int start_steps = 0;
+
 void loop() {
     static unsigned long lastNotifyTime = 0;
     //static unsigned long lastSDRecord = 0;
 
-   //Get current step count
+
+    //Get current step count
     int steps = getStepCount();
+
+
+    if (buttonPressed()) {
+        if(inSession){
+            inSession = false;
+            int sessionSteps = steps - start_steps;
+            Serial.printf("Session ended! Total steps: %d\n", sessionSteps);
+        }else{
+            inSession = true;
+            Serial.println("Session started!");
+            start_steps = steps;
+        }
+    }
 
     //If pulseTask just finished a read, print
     if (g_pulseUpdated) {
@@ -113,13 +160,10 @@ void loop() {
         }
     }
 
-
     //    now = millis();
     //    if(now - lastSDRecord >= SD_TIMEOUT){
     //        //HERE SAVE DATA TO SD CARD, ONCE EVERY SD_TIMEOUT
     //    }
-
-
 
     delay(10);
 }
