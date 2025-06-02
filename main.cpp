@@ -3,60 +3,124 @@
 #include "BLEPlx.h"
 #include "MotionSensor.h"
 
-static unsigned long lastNotify = 0;
+#define BLE_TIMEOUT 5000
 
+//Shared globals for SpO2/HR (updated by pulseTask)
+volatile int32_t g_spo2        = 0;
+volatile int32_t g_hr          = 0;
+volatile bool    g_validPulse  = false;
+
+// New flag: becomes true when pulseTask finishes a read:
+volatile bool    g_pulseUpdated = false;
+
+
+//Task handles
 TaskHandle_t motionTaskHandle = nullptr;
+TaskHandle_t pulseTaskHandle  = nullptr;
 
-// this runs independently at ~50 ms intervals:
+//motionTask
 void motionTask(void* pv) {
-    initMotion();
     while (1) {
         updateMotion();
-        vTaskDelay(pdMS_TO_TICKS(100));  // adjust to taste
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+//pulseTask (runs ~once per second)
+void pulseTask(void* pv) {
+    while (1) {
+        int32_t spo2, hr;
+        bool    okSpO2, okHR;
+
+        if (readPulseOxy(spo2, okSpO2, hr, okHR)) {
+            g_spo2        = spo2;
+            g_hr          = hr;
+            g_validPulse  = true;
+        } else {
+            g_validPulse  = false;
+        }
+
+        // Signal that new data is ready
+        g_pulseUpdated = true;
+
+        // Wait ~1 s before next read:
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 void setup() {
     Serial.begin(115200);
+
+    // Initialize sensors and BLE:
     initPulseOxy();
     initMotion();
     initBLE();
-    // create the motion task pinned to PRO CPU (core 1):
+
+    // Create motionTask pinned to Core 1:
     xTaskCreatePinnedToCore(
             motionTask,
             "MotionTask",
-            4096,            // stack
-            nullptr,         // params
-            1,               // priority
+            4096,
+            nullptr,
+            1,                // priority
             &motionTaskHandle,
-            1                // core 1
+            1                 // run on core 1
     );
 
+    // Create pulseTask pinned to Core 1:
+    xTaskCreatePinnedToCore(
+            pulseTask,
+            "PulseTask",
+            4096,
+            nullptr,
+            1,                //priority
+            &pulseTaskHandle,
+            1                 // run on core 1
+    );
 }
 
+
+
 void loop() {
-    int32_t spo2, hr;
-    bool    okSpO2, okHR;
+    static int32_t   lastSpo2         = 0;
+    static int32_t   lastHr           = 0;
+    static unsigned long lastNotify = 0;
+    //static unsigned long lastSDRecord = 0;
 
-    // get new step count + handle fall detection
+    //Get current step count (motionTask updates this in background)
     int steps = getStepCount();
-    notifySteps(steps);
 
-    // read pulse-ox
-    if (readPulseOxy(spo2, okSpO2, hr, okHR)) {
-        Serial.printf("HR: %ld bpm, SpO₂: %ld%%, Steps: %d\n", hr, spo2, steps);
-    } else {
-        Serial.println("Invalid SpO₂/HR, retrying...");
+
+    //If pulseTask just finished a read, print exactly once:
+    if (g_pulseUpdated) {
+        g_pulseUpdated = false;  // clear immediately
+
+        if (g_validPulse) {
+            // Grab the new values and print:
+            lastSpo2 = g_spo2;
+            lastHr   = g_hr;
+            Serial.printf("HR: %ld bpm, SpO: %ld%%, Steps: %d\n",
+                          lastHr, lastSpo2, steps);
+        } else {
+            Serial.println("Invalid SpO/HR, retrying...");
+        }
     }
 
-    // notify every 1s when connected
+    // 3) BLE‐notify
     unsigned long now = millis();
-    if (isConnected() && now - lastNotify >= 1000) {
+    if(isConnected() && now - lastNotify >= BLE_TIMEOUT){
         lastNotify = now;
-        notifyPlx(spo2, hr);
-//        notifySteps(steps);
+        notifyPlx(lastSpo2, lastHr);
+        notifySteps(steps);
         Serial.println("BLE notified all");
     }
 
-//    delay(10);
+//    now = millis();
+//    if(now - lastSDRecord >= SD_TIMEOUT){
+//        //HERE SAVE DATA TO SD CARD, ONCE EVERY SD_TIMEOUT
+//    }
+
+
+
+    delay(10);
 }

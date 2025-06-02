@@ -11,6 +11,7 @@ static float lastMagnitude = 0;
 static const float stepThreshold = 1.2;
 static const int   stepDelay     = 350;
 volatile int         stepCount     = 0;
+//volitale int workoutStepCount = 0;
 
 // fall detection state
 static bool     stillnessTimerRunning = false;
@@ -22,6 +23,14 @@ static unsigned long stillnessStartTime=0;
 int getStepCount() {
     return stepCount;
 }
+
+//int getWorkoutStepCount(){
+//    return workoutStepCount;
+//}
+
+//void setWorkoutStepCount(int step){
+//    workoutStepCount = step;
+//}
 
 
 static void calibrateGyro() {
@@ -69,6 +78,7 @@ int updateMotion() {
          (now - lastStepTime > stepDelay) )
     {
         stepCount++;
+        //workoutStepCount++
         lastStepTime = now;
         Serial.print("Step: "); Serial.println(stepCount);
     }
