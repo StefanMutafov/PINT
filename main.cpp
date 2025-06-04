@@ -2,9 +2,8 @@
 #include "PulseOxy.h"
 #include "BLEPlx.h"
 #include "MotionSensor.h"
-#include "FileStorage.h"
+#include "sdCard.h"
 #include <Wire.h>
-
 #define BLE_TIMEOUT 5000
 #define SD_TIMEOUT 10000
 #define BUTTON_PIN 2 // Button for starting and stopping session
@@ -18,11 +17,10 @@ volatile int32_t  g_hr           = 0;
 volatile bool     g_validPulse   = false;
 volatile bool     g_pulseUpdated = false;
 
-bool inSession = false; // True is the user is in a training session
+bool inSession = true; // True is the user is in a training session
 
 TaskHandle_t motionTaskHandle = nullptr;
 TaskHandle_t pulseTaskHandle  = nullptr;
-
 // Detect button presses
 bool buttonPressed() {
     static int           lastRaw       = HIGH;   // last raw reading
@@ -82,23 +80,22 @@ void pulseTask(void* pv) {
 
 void setup() {
     Serial.begin(115200);
-    Wire.begin(21,22);
 
    // pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    //Initialize SD card & SPI
-    if (!initFileStorage()) {
-        // SD init failed; handle error or halt
-        while (1) delay(1000);
-    }
+    // 1) Initialize SD card & SPI
+    SD_setup();
+    delay(1000);
+    Wire.begin(21, 22);
+    //Wire.setClock(400000);
 
-    //Start the RTC
     RTC_setup();
-
-
+    delay(1000);
     // Initialize sensors & BLE
     initPulseOxy();
+    //delay(10);
     initMotion();
+   // delay(10);
     initBLE();
 
     // Create motionTask on Core 1
@@ -128,6 +125,7 @@ void setup() {
 int start_steps = 0;
 
 void loop() {
+
     static unsigned long lastNotifyTime = 0;
     static unsigned long lastSDRecord = 0;
 

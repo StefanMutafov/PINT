@@ -9,7 +9,6 @@ static uint32_t irBuf[100], redBuf[100];
 static const uint8_t BUF_LEN = 100;
 
 void initPulseOxy() {
-   // Wire.begin(21, 22);
     if (!sensor.begin(Wire, I2C_SPEED_FAST)) {
         Serial.println(F("MAX30102 not found!"));
         while (1) delay(1000);

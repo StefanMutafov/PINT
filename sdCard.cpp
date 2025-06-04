@@ -10,13 +10,7 @@
 SPIClass spi(HSPI);
 static bool wasWorkingout = false;
 static String workoutID = "";
-//TwoWire RTCWire = TwoWire(1);
 uRTCLib rtc(0x68);
-void RTC_setup()
-{
-    URTCLIB_WIRE.setPins(25,26);
-  URTCLIB_WIRE.begin();
-}
 void SD_setup(){
     spi.begin(SPI_SCK, SPI_MISO, SPI_MOSI, CS_PIN);
     if (!SD.begin(CS_PIN, spi)) {
@@ -28,12 +22,15 @@ void SD_setup(){
 String get_timestamp()
 {
   rtc.refresh();
-  String timestamp = String(rtc.year()) + '/' + ((rtc.month() < 10) ? "0" : "") + String(rtc.month()) + '/' + ((rtc.day() < 10) ? "0" : "") + String(rtc.day()) + 'T' + ((rtc.hour() < 10) ? "0" : "") + String(rtc.hour()) + ':' + ((rtc.minute() < 10) ? "0" : "") + String(rtc.minute()) + ':' + ((rtc.second() < 10) ? "0" : "") + String(rtc.second());
+  String timestamp = String(rtc.year()) + '_' + ((rtc.month() < 10) ? "0" : "") + String(rtc.month()) + '_' + ((rtc.day() < 10) ? "0" : "") + String(rtc.day()) + 'T' + ((rtc.hour() < 10) ? "0" : "") + String(rtc.hour()) + ':' + ((rtc.minute() < 10) ? "0" : "") + String(rtc.minute()) + ':' + ((rtc.second() < 10) ? "0" : "") + String(rtc.second());
   return timestamp;
 }
-
+void RTC_setup(){
+URTCLIB_WIRE.setPins(25,26);
+URTCLIB_WIRE.begin();
+}
 String getDate(String timestamp){
-    return timestamp.substring(0, 2) + timestamp.substring(3,5)+timestamp.substring(6,8);
+    return timestamp.substring(0, 8);
 }
 // function to delete all the files in the sd card
 void delete_file() {
@@ -54,6 +51,7 @@ void delete_file() {
 }
 // Function to return the data in the specific file as a json string
 String read_file(String fileName) {
+    Serial.println("Filename: (in read_file) " + fileName);
     File file = SD.open(fileName, FILE_READ);
     String jsonStr = "";
 
@@ -98,6 +96,7 @@ String* read_file_list() {
 // Function to write data (with timestamp) into the file
 bool write_file(int bpm, int oxy, int step, bool isworkingout) {
     String timestamp = get_timestamp();
+    Serial.println("Timestamp: " +timestamp);
     if (!wasWorkingout && isworkingout) {
         wasWorkingout = true;
         workoutID = timestamp;
@@ -126,13 +125,20 @@ bool write_file(int bpm, int oxy, int step, bool isworkingout) {
 
     // Add new data
     JsonObject entry = dataArray.createNestedObject();
-    entry["workout_id"] = workoutID;
+    if (isworkingout){
+        entry["workout_id"] = workoutID;
+    }
+    else{
+        entry["workout_id"] = NULL;
+    }
+
     entry["timestamp"] = timestamp;
     entry["heart_rate"] = bpm;
     entry["oxygen_saturation"] = oxy;
     entry["step_count"] = step;
 
     // Overwrite with updated JSON
+    Serial.println("Filename: (in write_file)" + fileName);
     File file = SD.open(fileName, FILE_WRITE);
     if (!file) {
         Serial.println("Failed to open file for writing.");

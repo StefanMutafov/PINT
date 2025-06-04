@@ -3,7 +3,7 @@
 #include <MPU6050.h>
 #include <math.h>
 
-static MPU6050 mpu;
+static MPU6050 mpu(0x69);
 static int16_t ax, ay, az, gx, gy, gz;
 static int16_t gx_offset, gy_offset, gz_offset;
 static unsigned long lastStepTime = 0;
@@ -51,7 +51,6 @@ static void calibrateGyro() {
 }
 
 void initMotion() {
-   // Wire.begin(21,22);
     mpu.initialize();
     if (mpu.testConnection()) {
         Serial.println("MPU6050 connected");
