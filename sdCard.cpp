@@ -66,21 +66,14 @@ String getDate(String timestamp){
 }
 // function to delete all the files in the sd card
 void delete_file() {
-    File root = SD.open("/");
-    File entry = root.openNextFile();
-    while (entry) {
-        if (!entry.isDirectory()) {
-            String fileName = entry.name();
-            entry.close();
-            SD.remove(fileName);
-            Serial.println(String("Deleted: ") + fileName);
-        } else {
-            entry.close();
-        }
-        entry = root.openNextFile();
+    String* files = read_file_list();
+    if (files[0].length() > 0) {
+        String path = "/" + files[0];
+        SD.remove(path);
     }
-    root.close();
+    delete[] files;
 }
+
 // Function to return the data in the specific file as a json string
 String read_file(String fileName) {
     Serial.println("Filename: (in read_file) " + fileName);

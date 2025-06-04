@@ -7,6 +7,7 @@
 
 #define BLE_TIMEOUT 5000
 #define SD_TIMEOUT 10000
+#define BT_SEND_TIMEOUT 60000
 
 #define BUTTON_PIN 0 // Button for starting and stopping session
 
@@ -124,9 +125,11 @@ void loop() {
 
     static unsigned long lastNotifyTime = 0;
     static unsigned long lastSDRecord = 0;
+    static unsigned long lastSendTry = 0;
     String today = getDate(get_timestamp());
+    unsigned long now = millis();
 
-    if (g_sendInitiated) {
+    if (g_sendInitiated && now - lastSendTry >= BT_SEND_TIMEOUT) {
         if (isConnected()) {
             sendFileOverBLE();
             g_sendInitiated = false;
@@ -181,7 +184,7 @@ void loop() {
     }
 
     //BLE‐notify every BLE_TIMEOUT ms, but only if the last pulse was valid
-    unsigned long now = millis();
+
     if (g_validPulse && (now - lastNotifyTime >= BLE_TIMEOUT)) {
         lastNotifyTime = now;
         if (isConnected()) {
