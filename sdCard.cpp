@@ -21,44 +21,44 @@ void SD_setup(){
     Serial.println("SD Card Initialized.");
 }
 byte bcdToDec(byte val) {
-  return ( (val / 16 * 10) + (val % 16) );
+    return ( (val / 16 * 10) + (val % 16) );
 }
 String get_timestamp() {
-  Wire.beginTransmission(DS3231_ADDRESS);
-  Wire.write(0); // Set DS3231 register pointer to 00h (seconds register)
-  Wire.endTransmission();
+    Wire.beginTransmission(DS3231_ADDRESS);
+    Wire.write(0); // Set DS3231 register pointer to 00h (seconds register)
+    Wire.endTransmission();
 
-  Wire.requestFrom(DS3231_ADDRESS, 7);
-  if (Wire.available() < 7) {
-    return String("Error: No data");
-  }
+    Wire.requestFrom(DS3231_ADDRESS, 7);
+    if (Wire.available() < 7) {
+        return String("Error: No data");
+    }
 
-  byte rawSeconds = Wire.read();
-  byte rawMinutes = Wire.read();
-  byte rawHours = Wire.read();
-  Wire.read(); // Day of week, ignore
-  byte rawDay = Wire.read();
-  byte rawMonth = Wire.read();
-  byte rawYear = Wire.read();
+    byte rawSeconds = Wire.read();
+    byte rawMinutes = Wire.read();
+    byte rawHours = Wire.read();
+    Wire.read(); // Day of week, ignore
+    byte rawDay = Wire.read();
+    byte rawMonth = Wire.read();
+    byte rawYear = Wire.read();
 
-  int year = 2000 + bcdToDec(rawYear);
-  int month = bcdToDec(rawMonth & 0x1F); // Mask century bit
-  int day = bcdToDec(rawDay);
-  int hour = bcdToDec(rawHours & 0x3F); // 24-hour format mask
-  int minute = bcdToDec(rawMinutes);
-  int second = bcdToDec(rawSeconds);
+    int year = 2000 + bcdToDec(rawYear);
+    int month = bcdToDec(rawMonth & 0x1F); // Mask century bit
+    int day = bcdToDec(rawDay);
+    int hour = bcdToDec(rawHours & 0x3F); // 24-hour format mask
+    int minute = bcdToDec(rawMinutes);
+    int second = bcdToDec(rawSeconds);
 
-  String timestamp = String(year) + '_' +
-                     (month < 10 ? "0" : "") + String(month) + '_' +
-                     (day < 10 ? "0" : "") + String(day) + 'T' +
-                     (hour < 10 ? "0" : "") + String(hour) + ':' +
-                     (minute < 10 ? "0" : "") + String(minute) + ':' +
-                     (second < 10 ? "0" : "") + String(second);
+    String timestamp = String(year) + '_' +
+                       (month < 10 ? "0" : "") + String(month) + '_' +
+                       (day < 10 ? "0" : "") + String(day) + 'T' +
+                       (hour < 10 ? "0" : "") + String(hour) + ':' +
+                       (minute < 10 ? "0" : "") + String(minute) + ':' +
+                       (second < 10 ? "0" : "") + String(second);
 
-  return timestamp;
+    return timestamp;
 }
 void RTC_setup() {
-  Wire1.begin(21, 22); // Initialize I2C bus on pins 25 (SDA) and 26 (SCL)
+    Wire1.begin(21, 22); // Initialize I2C bus on pins 25 (SDA) and 26 (SCL)
 }
 
 String getDate(String timestamp){
@@ -118,10 +118,67 @@ String* read_file_list() {
 
 
 
-// Function to write data (with timestamp) into the file
+bool appendToJsonArrayFile(const String& fileName, JsonObject& newEntry) {
+    // Try to open existing file for reading
+    File file = SD.open(fileName, FILE_READ);
+    if (!file) {
+        // File doesn't exist, create a new JSON array file with one entry
+        StaticJsonDocument<512> doc;
+        JsonArray data = doc.to<JsonArray>();
+        data.add(newEntry);
+
+        file = SD.open(fileName, FILE_WRITE);
+        if (!file) {
+            Serial.println("Failed to create file");
+            return false;
+        }
+        serializeJson(doc, file);
+        file.close();
+        return true;
+    }
+
+    size_t fileSize = file.size();
+    if (fileSize < 2) {
+        // File too small to be valid JSON array, close and recreate
+        file.close();
+        return appendToJsonArrayFile(fileName, newEntry);
+    }
+
+    // Move to the byte before the last character (expected to be ']')
+    file.seek(fileSize - 2);
+    char prevChar = file.read();
+    file.close();
+
+    // Open file for writing, and seek to overwrite the closing ']'
+    file = SD.open(fileName, FILE_WRITE);
+    if (!file) {
+        Serial.println("Failed to open file for writing");
+        return false;
+    }
+    file.seek(fileSize - 1); // Just before the closing ']'
+
+    if (prevChar == '[') {
+        // The array is empty, just write the new entry and close bracket
+        serializeJson(newEntry, file);
+        file.print("]");
+    } else {
+        // There are existing entries, so write a comma before new entry
+        file.print(",");
+        serializeJson(newEntry, file);
+        file.print("]");
+    }
+
+    file.close();
+    return true;
+}
+
 bool write_file(int bpm, int oxy, int step, bool isworkingout) {
     String timestamp = get_timestamp();
-    Serial.println("Timestamp: " +timestamp);
+    Serial.println("Timestamp: " + timestamp);
+
+    static bool wasWorkingout = false;
+    static String workoutID = "";
+
     if (!wasWorkingout && isworkingout) {
         wasWorkingout = true;
         workoutID = timestamp;
@@ -132,45 +189,26 @@ bool write_file(int bpm, int oxy, int step, bool isworkingout) {
 
     String fileName = "/" + getDate(timestamp) + ".json";
 
-    // Read existing JSON content
-    String jsonStr = read_file(fileName);
-    StaticJsonDocument<4096> doc;
-    JsonArray dataArray;
+    StaticJsonDocument<256> entryDoc;
+    JsonObject entry = entryDoc.to<JsonObject>();
 
-    // Parse or initialize
-    if (jsonStr.length() == 0 || deserializeJson(doc, jsonStr) != DeserializationError::Ok) {
-        doc["device_id"] = "12345";
-        dataArray = doc.createNestedArray("data");
-    } else {
-        dataArray = doc["data"].as<JsonArray>();
-        if (dataArray.isNull()) {
-            dataArray = doc.createNestedArray("data");
-        }
-    }
-
-    // Add new data
-    JsonObject entry = dataArray.createNestedObject();
-    if (isworkingout){
+    if (isworkingout) {
         entry["workout_id"] = workoutID;
-    }
-    else{
+    } else {
         entry["workout_id"] = NULL;
     }
-
     entry["timestamp"] = timestamp;
     entry["heart_rate"] = bpm;
     entry["oxygen_saturation"] = oxy;
     entry["step_count"] = step;
 
-    // Overwrite with updated JSON
-    Serial.println("Filename: (in write_file)" + fileName);
-    File file = SD.open(fileName, FILE_WRITE);
-    if (!file) {
-        Serial.println("Failed to open file for writing.");
-        return false;
+    bool success = appendToJsonArrayFile(fileName, entry);
+
+    if (success) {
+        Serial.println("Appended data to " + fileName);
+    } else {
+        Serial.println("Failed to append data.");
     }
-    serializeJson(doc, file);
-    file.close();
-    Serial.println("Appended data to " + fileName);
-    return true;
+
+    return success;
 }

@@ -146,6 +146,10 @@ void loop() {
     while (files[count].length() > 0) {
         count++;
     }
+    Serial.println("Files are:");
+    for(int i = 0; i < count; ++i){
+        Serial.println(files[i]);
+    }
     if (count > 1 && isConnected()) {
         String filepath = "/" + files[0];
         sendFileOverBLE();
