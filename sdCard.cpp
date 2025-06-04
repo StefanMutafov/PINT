@@ -1,16 +1,17 @@
 #include <SPI.h>
 #include <SD.h>
 #include <ArduinoJson.h>
-#include <uRTCLib.h>
 #include "sdCard.h"
+#include <Wire.h>
 #define CS_PIN 15
 #define SPI_MOSI 13
 #define SPI_MISO 12
 #define SPI_SCK  17
+#define DS3231_ADDRESS 0x68
 SPIClass spi(HSPI);
 static bool wasWorkingout = false;
 static String workoutID = "";
-uRTCLib rtc(0x68);
+
 void SD_setup(){
     spi.begin(SPI_SCK, SPI_MISO, SPI_MOSI, CS_PIN);
     if (!SD.begin(CS_PIN, spi)) {
@@ -19,18 +20,49 @@ void SD_setup(){
     }
     Serial.println("SD Card Initialized.");
 }
-String get_timestamp()
-{
-  rtc.refresh();
-  String timestamp = String(rtc.year()) + '_' + ((rtc.month() < 10) ? "0" : "") + String(rtc.month()) + '_' + ((rtc.day() < 10) ? "0" : "") + String(rtc.day()) + 'T' + ((rtc.hour() < 10) ? "0" : "") + String(rtc.hour()) + ':' + ((rtc.minute() < 10) ? "0" : "") + String(rtc.minute()) + ':' + ((rtc.second() < 10) ? "0" : "") + String(rtc.second());
+byte bcdToDec(byte val) {
+  return ( (val / 16 * 10) + (val % 16) );
+}
+String get_timestamp() {
+  Wire.beginTransmission(DS3231_ADDRESS);
+  Wire.write(0); // Set DS3231 register pointer to 00h (seconds register)
+  Wire.endTransmission();
+
+  Wire.requestFrom(DS3231_ADDRESS, 7);
+  if (Wire.available() < 7) {
+    return String("Error: No data");
+  }
+
+  byte rawSeconds = Wire.read();
+  byte rawMinutes = Wire.read();
+  byte rawHours = Wire.read();
+  Wire.read(); // Day of week, ignore
+  byte rawDay = Wire.read();
+  byte rawMonth = Wire.read();
+  byte rawYear = Wire.read();
+
+  int year = 2000 + bcdToDec(rawYear);
+  int month = bcdToDec(rawMonth & 0x1F); // Mask century bit
+  int day = bcdToDec(rawDay);
+  int hour = bcdToDec(rawHours & 0x3F); // 24-hour format mask
+  int minute = bcdToDec(rawMinutes);
+  int second = bcdToDec(rawSeconds);
+
+  String timestamp = String(year) + '_' +
+                     (month < 10 ? "0" : "") + String(month) + '_' +
+                     (day < 10 ? "0" : "") + String(day) + 'T' +
+                     (hour < 10 ? "0" : "") + String(hour) + ':' +
+                     (minute < 10 ? "0" : "") + String(minute) + ':' +
+                     (second < 10 ? "0" : "") + String(second);
+
   return timestamp;
 }
-void RTC_setup(){
-URTCLIB_WIRE.setPins(25,26);
-URTCLIB_WIRE.begin();
+void RTC_setup() {
+  Wire1.begin(21, 22); // Initialize I2C bus on pins 25 (SDA) and 26 (SCL)
 }
+
 String getDate(String timestamp){
-    return timestamp.substring(0, 8);
+    return timestamp.substring(0, 10);
 }
 // function to delete all the files in the sd card
 void delete_file() {

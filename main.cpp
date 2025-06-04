@@ -88,8 +88,6 @@ void setup() {
     delay(1000);
     Wire.begin(21, 22);
     //Wire.setClock(400000);
-
-    RTC_setup();
     delay(1000);
     // Initialize sensors & BLE
     initPulseOxy();
