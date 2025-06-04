@@ -131,7 +131,7 @@ void loop() {
 
     if (g_sendInitiated && now - lastSendTry >= BT_SEND_TIMEOUT) {
         if (isConnected()) {
-            sendFileOverBLE();
+           // sendFileOverBLE();
             g_sendInitiated = false;
         } else {
             Serial.println("No BLE client connected—cannot send file.");
@@ -146,13 +146,9 @@ void loop() {
     while (files[count].length() > 0) {
         count++;
     }
-    Serial.println("Files are:");
-    for(int i = 0; i < count; ++i){
-        Serial.println(files[i]);
-    }
     if (count > 1 && isConnected()) {
         String filepath = "/" + files[0];
-        sendFileOverBLE();
+       // sendFileOverBLE();
         delete_file();
     }
     delete[] files;

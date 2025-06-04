@@ -91,17 +91,19 @@ String read_file(String fileName) {
     Serial.flush();
     return jsonStr;
 }
-// Function to return the all the files stored in sd card as array
+
 String* read_file_list() {
-    static String fileNames[50]; // Assuming max 50 files
+    static String fileNames[50];
     int index = 0;
 
     File root = SD.open("/");
     File entry = root.openNextFile();
     while (entry && index < 50) {
         if (!entry.isDirectory()) {
-            fileNames[index] = String(entry.name());
-            index++;
+            String name = String(entry.name());
+            if (!name.startsWith("._")) {
+                fileNames[index++] = name;
+            }
         }
         entry.close();
         entry = root.openNextFile();
