@@ -3,6 +3,7 @@
 #include "BLEPlx.h"
 #include "MotionSensor.h"
 #include "FileStorage.h"
+#include <Wire.h>
 
 #define BLE_TIMEOUT 5000
 #define SD_TIMEOUT 10000
@@ -81,16 +82,17 @@ void pulseTask(void* pv) {
 
 void setup() {
     Serial.begin(115200);
+    Wire.begin(21,22);
 
    // pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-    // 1) Initialize SD card & SPI
+    //Initialize SD card & SPI
     if (!initFileStorage()) {
         // SD init failed; handle error or halt
         while (1) delay(1000);
     }
 
-    // 2) Start the RTC
+    //Start the RTC
     RTC_setup();
 
 

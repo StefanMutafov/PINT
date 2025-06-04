@@ -51,7 +51,7 @@ static void calibrateGyro() {
 }
 
 void initMotion() {
-    Wire.begin(21,22);
+   // Wire.begin(21,22);
     mpu.initialize();
     if (mpu.testConnection()) {
         Serial.println("MPU6050 connected");

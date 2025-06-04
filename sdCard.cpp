@@ -10,9 +10,11 @@
 SPIClass spi(HSPI);
 static bool wasWorkingout = false;
 static String workoutID = "";
+//TwoWire RTCWire = TwoWire(1);
 uRTCLib rtc(0x68);
 void RTC_setup()
 {
+    URTCLIB_WIRE.setPins(25,26);
   URTCLIB_WIRE.begin();
 }
 void SD_setup(){
