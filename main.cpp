@@ -90,9 +90,9 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     SD_setup();
-    delay(1000);
+    //delay(1000);
     Wire.begin(21, 22);
-    delay(1000);
+   // delay(1000);
     initPulseOxy();
     initMotion();
     initBLE();
@@ -130,8 +130,9 @@ void loop() {
     unsigned long now = millis();
 
     if (g_sendInitiated && now - lastSendTry >= BT_SEND_TIMEOUT) {
+        lastSendTry = now;
         if (isConnected()) {
-           // sendFileOverBLE();
+            sendFileOverBLE();
             g_sendInitiated = false;
         } else {
             Serial.println("No BLE client connected—cannot send file.");
@@ -148,7 +149,7 @@ void loop() {
     }
     if (count > 1 && isConnected()) {
         String filepath = "/" + files[0];
-       // sendFileOverBLE();
+        sendFileOverBLE();
         delete_file();
     }
     delete[] files;
@@ -197,6 +198,8 @@ void loop() {
     now = millis();
     if (now - lastSDRecord >= SD_TIMEOUT) {
         lastSDRecord = now;
+        Serial.printf("Writing to file: HR: %ld bpm, SpO2: %ld%%, Steps: %d\n",
+                      (long) g_hr, (long) g_spo2, steps);
         write_file(g_hr, g_spo2, steps, inSession);
     }
 

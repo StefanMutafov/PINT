@@ -125,7 +125,7 @@ bool appendToJsonArrayFile(const String& fileName, JsonObject& newEntry) {
     File file = SD.open(fileName, FILE_READ);
     if (!file) {
         // File doesn't exist, create a new JSON array file with one entry
-        StaticJsonDocument<512> doc;
+        DynamicJsonDocument doc(1024);
         JsonArray data = doc.to<JsonArray>();
         data.add(newEntry);
 
@@ -191,7 +191,9 @@ bool write_file(int bpm, int oxy, int step, bool isworkingout) {
 
     String fileName = "/" + getDate(timestamp) + ".json";
 
-    StaticJsonDocument<256> entryDoc;
+//    StaticJsonDocument<256> entryDoc;
+//    JsonObject entry = entryDoc.to<JsonObject>();
+    DynamicJsonDocument entryDoc(256);
     JsonObject entry = entryDoc.to<JsonObject>();
 
     if (isworkingout) {
