@@ -11,7 +11,8 @@ static float lastMagnitude = 0;
 static const float stepThreshold = 1.2;
 static const int   stepDelay     = 350;
 volatile int         stepCount     = 0;
-//volitale int workoutStepCount = 0;
+
+
 
 // fall detection state
 static bool     stillnessTimerRunning = false;
@@ -24,15 +25,7 @@ int getStepCount() {
     return stepCount;
 }
 
-//int getWorkoutStepCount(){
-//    return workoutStepCount;
-//}
-
-//void setWorkoutStepCount(int step){
-//    workoutStepCount = step;
-//}
-
-
+//Initial calibration
 static void calibrateGyro() {
     const int readings = 100;
     int32_t tx=0, ty=0, tz=0;
@@ -96,6 +89,7 @@ int updateMotion() {
         if (magnitude >= 0.8 && magnitude <= 1.2) {
             if (now - stillnessStartTime >= stillnessDuration) {
                 Serial.println("Fall confirmed (stillness)!");
+                //fall_detected = true;
                 stillnessTimerRunning = false;
             }
         } else {

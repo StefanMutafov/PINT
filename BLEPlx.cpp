@@ -113,50 +113,32 @@ void notifySteps(int stepCount) {
 //   breaks it into chunks, and sends each chunk with notify().
 //   At the end sends a zero‐length notify() as EOF.
 void sendFileOverBLE() {
-    if (!connected) {
-        Serial.println("sendFileOverBLE: no BLE client connected, aborting");
-        return;
-    }
+    if (!isConnected()) return;
 
+    // 1) Get the single JSON filename
     String* files = read_file_list();
-    if (!files || String(files[0]).length() == 0) {
-        Serial.println("sendFileOverBLE: no files found on SD");
-        delete[] files;
-        return;
-    }
-
-    // Build the full path: e.g. "/2025_06_02.json"
+    if (files[0].isEmpty()) return;
     String filename = "/" + files[0];
-    Serial.print("Sending file: ");
-    Serial.println(filename);
-    delete[] files;  // free the dynamically‐allocated array immediately
 
-    //Pull JSON off SD
+    // 2) Read its contents
     String jsonStr = read_file(filename);
-    Serial.println(jsonStr.c_str());
-    if (jsonStr.length() == 0) {
-        Serial.printf("sendFileOverBLE: \"%s\" empty or not found\n", filename.c_str());
-        return;
-    }
+    if (jsonStr.isEmpty()) return;
 
-    Serial.printf("sendFileOverBLE: streaming \"%s\" …\n", filename.c_str());
-    //Chunking: default ATT MTU is 23 → 20 bytes data,
-    static const size_t CHUNK_SIZE = 120;
+    // 3) Stream in fixed‐size chunks directly from the String’s buffer
+    const char* data = jsonStr.c_str();
+    Serial.println(data);
     size_t totalLen = jsonStr.length();
-    size_t offset = 0;
+    const size_t CHUNK_SIZE = 120;
 
-    while (offset < totalLen) {
-        size_t chunk = min(CHUNK_SIZE, totalLen - offset);
-        // copy substring into a temporary std::string to get raw bytes
-        std::string piece = jsonStr.substring(offset, offset + chunk).c_str();
-//        Serial.println(piece.c_str());
-        fileChar->setValue((uint8_t*)piece.data(), chunk);
+    for (size_t offset = 0; offset < totalLen; offset += CHUNK_SIZE) {
+        size_t len = min(CHUNK_SIZE, totalLen - offset);
+        fileChar->setValue((uint8_t*)(data + offset), len);
+
         fileChar->notify();
-        offset += chunk;
-        delay(10);  // short pause to let BLE stack catch up
+        delay(10);
     }
 
-    //Send a zero‐length notification as EOF marker
+    // 4) Send zero‐length packet as EOF
     fileChar->setValue(nullptr, 0);
     fileChar->notify();
     Serial.println("sendFileOverBLE: EOF marker sent");

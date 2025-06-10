@@ -5,13 +5,13 @@
 #include "sdCard.h"
 #include <Wire.h>
 
-#define BLE_TIMEOUT 5000
-#define SD_TIMEOUT 10000
-#define BT_SEND_TIMEOUT 60000
+#define BLE_TIMEOUT 5000 //Timeout for sending live data through BLE
+#define SD_TIMEOUT 10000 //Timeout for saving data on SD
+#define BT_SEND_TIMEOUT 60000 //Timeout for sending files through BLE
 
 #define BUTTON_PIN 0 // Button for starting and stopping session
 
-//   Shared     globals for SpO2/HR (written by pulseTask)
+//   Shared globals for SpO2/HR (written by pulseTask)
 //   g_spo2/g_hr hold whatever the last valid reading was.
 //   g_validPulse tells us if that reading was valid.
 //   g_pulseUpdated flips to true exactly when pulseTask finishes a read.
@@ -19,15 +19,15 @@ volatile int32_t g_spo2 = 0;
 volatile int32_t g_hr = 0;
 volatile bool g_validPulse = false;
 volatile bool g_pulseUpdated = false;
-volatile bool g_sendInitiated = false;
+volatile bool g_sendInitiated = false; //Flag for sending files through BLE
 
 bool inSession = false; // True is the user is in a training session
-String lastDate = "";  // holds YYYY_MM_DD of the file we last saw
 
 TaskHandle_t motionTaskHandle = nullptr;
 TaskHandle_t pulseTaskHandle = nullptr;
 
 // Detect button presses
+//Used for staring and ending workout
 bool buttonPressed() {
     static int lastRaw = HIGH;   // last raw reading
     static int debounced = HIGH;   // last accepted state
@@ -90,14 +90,12 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     SD_setup();
-    //delay(1000);
     Wire.begin(21, 22);
-   // delay(1000);
     initPulseOxy();
     initMotion();
     initBLE();
 
-    // Create motionTask on Core 1
+    // Create motionTask on Core 1(Main loop on Core 0)
     xTaskCreatePinnedToCore(
             motionTask,
             "MotionTask",
@@ -108,7 +106,7 @@ void setup() {
             1                 // run on core 1
     );
 
-    // Create pulseTask on Core 1
+    // Create pulseTask on Core 1(Main loop on core 0)
     xTaskCreatePinnedToCore(
             pulseTask,
             "PulseTask",
@@ -123,25 +121,36 @@ void setup() {
 
 void loop() {
 
-    static unsigned long lastNotifyTime = 0;
-    static unsigned long lastSDRecord = 0;
-    static unsigned long lastSendTry = 0;
+
+    ///
+    ///TODO:
+    ///Add fall_detected variable and change it in update_motion(), so that instead of a print, the variable is set to true
+    /// If fall_detected is true, play sound untill button pressed
+    /// Add GUI
+    ///
+
+
+    static unsigned long lastNotifyTime = 0; //Last time BLE notify
+    static unsigned long lastSDRecord = 0; //Last SD-card write
+    static unsigned long lastSendTry = 0; //Last BLE file transfer attempt
     String today = getDate(get_timestamp());
     unsigned long now = millis();
 
+    //If g_sendInitiated flag is true, try to send the oldest file in SD
     if (g_sendInitiated && now - lastSendTry >= BT_SEND_TIMEOUT) {
         lastSendTry = now;
         if (isConnected()) {
             sendFileOverBLE();
             g_sendInitiated = false;
         } else {
+            //Test print, can be removed
             Serial.println("No BLE client connected—cannot send file.");
         }
     }
 
 
 
-
+    //Files on the sd card
     String* files = read_file_list();
     int count = 0;
     while (files[count].length() > 0) {
@@ -152,14 +161,13 @@ void loop() {
         sendFileOverBLE();
         delete_file();
     }
-    delete[] files;
 
 
 
     //Get current step count
     int steps = getStepCount();
 
-
+    //If button is presses, start or stop session and set send flag true if needed
     if (buttonPressed()) {
         if (inSession) {
             inSession = false;
@@ -184,9 +192,10 @@ void loop() {
         }
     }
 
-    //BLE‐notify every BLE_TIMEOUT ms, but only if the last pulse was valid
 
-    if (g_validPulse && (now - lastNotifyTime >= BLE_TIMEOUT)) {
+
+    //BLE‐notify every BLE_TIMEOUT ms, but only if the last pulse was valid
+    if (now - lastNotifyTime >= BLE_TIMEOUT) {
         lastNotifyTime = now;
         if (isConnected()) {
             notifyPlx(g_spo2, g_hr);
@@ -196,6 +205,7 @@ void loop() {
     }
 
     now = millis();
+    //Write data to SD card
     if (now - lastSDRecord >= SD_TIMEOUT) {
         lastSDRecord = now;
         Serial.printf("Writing to file: HR: %ld bpm, SpO2: %ld%%, Steps: %d\n",

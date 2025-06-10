@@ -9,8 +9,7 @@
 #define SPI_SCK  17
 #define DS3231_ADDRESS 0x68
 SPIClass spi(HSPI);
-static bool wasWorkingout = false;
-static String workoutID = "";
+
 
 void SD_setup(){
     spi.begin(SPI_SCK, SPI_MISO, SPI_MOSI, CS_PIN);
@@ -30,7 +29,7 @@ String get_timestamp() {
 
     Wire.requestFrom(DS3231_ADDRESS, 7);
     if (Wire.available() < 7) {
-        return String("Error: No data");
+        return {"Error: No data"};
     }
 
     byte rawSeconds = Wire.read();
@@ -61,21 +60,22 @@ void RTC_setup() {
     Wire1.begin(21, 22); // Initialize I2C bus on pins 25 (SDA) and 26 (SCL)
 }
 
-String getDate(String timestamp){
+String getDate(const String& timestamp){
     return timestamp.substring(0, 10);
 }
-// function to delete all the files in the sd card
+
+// function to delete the oldest file on the SD card
 void delete_file() {
     String* files = read_file_list();
     if (files[0].length() > 0) {
         String path = "/" + files[0];
         SD.remove(path);
     }
-    delete[] files;
+
 }
 
 // Function to return the data in the specific file as a json string
-String read_file(String fileName) {
+String read_file(const String& fileName) {
     Serial.println("Filename: (in read_file) " + fileName);
     File file = SD.open(fileName, FILE_READ);
     String jsonStr = "";
@@ -92,87 +92,98 @@ String read_file(String fileName) {
     return jsonStr;
 }
 
+//return a list of the files by chronological order
 String* read_file_list() {
-    static String fileNames[50];
-    int index = 0;
+    static String fileNames[51];  // up to 50 names + sentinel
+    int count = 0;
 
     File root = SD.open("/");
-    File entry = root.openNextFile();
-    while (entry && index < 50) {
+    if (!root || !root.isDirectory()) {
+        fileNames[0] = "";
+        return fileNames;
+    }
+
+    File entry;
+    while ((entry = root.openNextFile()) && count < 50) {
         if (!entry.isDirectory()) {
-            String name = String(entry.name());
+            String name = entry.name();
             if (!name.startsWith("._")) {
-                fileNames[index++] = name;
+                fileNames[count++] = name;
             }
         }
         entry.close();
-        entry = root.openNextFile();
     }
     root.close();
 
-    String* result = new String[index + 1];
-    for (int i = 0; i < index; i++) {
-        result[i] = fileNames[i];
+    // In‐place sort ascending
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (fileNames[j] < fileNames[i]) {
+                String tmp = fileNames[i];
+                fileNames[i] = fileNames[j];
+                fileNames[j] = tmp;
+            }
+        }
     }
-    result[index] = "";
-    return result;
+
+    fileNames[count] = "";  // sentinel
+    return fileNames;
 }
+
 
 
 
 bool appendToJsonArrayFile(const String& fileName, JsonObject& newEntry) {
     // Try to open existing file for reading
     File file = SD.open(fileName, FILE_READ);
-    if (!file) {
-        // File doesn't exist, create a new JSON array file with one entry
+    size_t fileSize = file ? file.size() : 0;
+
+    // If no file or too small to be a JSON array, create a new array with one entry
+    if (!file || fileSize < 2) {
+        if (file) {
+            file.close();
+        }
         DynamicJsonDocument doc(1024);
         JsonArray data = doc.to<JsonArray>();
         data.add(newEntry);
 
-        file = SD.open(fileName, FILE_WRITE);
-        if (!file) {
-            Serial.println("Failed to create file");
+        File out = SD.open(fileName, FILE_WRITE);
+        if (!out) {
             return false;
         }
-        serializeJson(doc, file);
-        file.close();
+        serializeJson(doc, out);
+        out.close();
         return true;
     }
 
-    size_t fileSize = file.size();
-    if (fileSize < 2) {
-        // File too small to be valid JSON array, close and recreate
-        file.close();
-        return appendToJsonArrayFile(fileName, newEntry);
-    }
-
-    // Move to the byte before the last character (expected to be ']')
+    // File exists and is at least "[ ]"
+    // Read the character before the closing ']' to see if array is empty
     file.seek(fileSize - 2);
     char prevChar = file.read();
     file.close();
 
-    // Open file for writing, and seek to overwrite the closing ']'
-    file = SD.open(fileName, FILE_WRITE);
-    if (!file) {
-        Serial.println("Failed to open file for writing");
+    // Open file for writing, seek to overwrite the closing ']'
+    File out = SD.open(fileName, FILE_WRITE);
+    if (!out) {
         return false;
     }
-    file.seek(fileSize - 1); // Just before the closing ']'
+    out.seek(fileSize - 1); // position before ']'
 
     if (prevChar == '[') {
-        // The array is empty, just write the new entry and close bracket
-        serializeJson(newEntry, file);
-        file.print("]");
+        // Empty array: write the new entry then closing bracket
+        serializeJson(newEntry, out);
+        out.print("]");
     } else {
-        // There are existing entries, so write a comma before new entry
-        file.print(",");
-        serializeJson(newEntry, file);
-        file.print("]");
+        // Non-empty array: prepend comma, write entry, then closing bracket
+        out.print(",");
+        serializeJson(newEntry, out);
+        out.print("]");
     }
 
-    file.close();
+    out.close();
     return true;
 }
+
 
 bool write_file(int bpm, int oxy, int step, bool isworkingout) {
     String timestamp = get_timestamp();
@@ -190,9 +201,6 @@ bool write_file(int bpm, int oxy, int step, bool isworkingout) {
     }
 
     String fileName = "/" + getDate(timestamp) + ".json";
-
-//    StaticJsonDocument<256> entryDoc;
-//    JsonObject entry = entryDoc.to<JsonObject>();
     DynamicJsonDocument entryDoc(256);
     JsonObject entry = entryDoc.to<JsonObject>();
 
