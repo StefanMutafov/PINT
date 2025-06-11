@@ -8,12 +8,12 @@
 #define SPI_MISO 12
 #define SPI_SCK  17
 #define DS3231_ADDRESS 0x68
-SPIClass spi(HSPI);
+SPIClass hspi(HSPI);
 
 
 void SD_setup(){
-    spi.begin(SPI_SCK, SPI_MISO, SPI_MOSI, CS_PIN);
-    if (!SD.begin(CS_PIN, spi)) {
+    hspi.begin(SPI_SCK, SPI_MISO, SPI_MOSI, CS_PIN);
+    if (!SD.begin(CS_PIN, hspi)) {
         Serial.println("SD Card Mount Failed!");
         return;
     }
@@ -56,12 +56,19 @@ String get_timestamp() {
 
     return timestamp;
 }
+
 void RTC_setup() {
     Wire1.begin(21, 22); // Initialize I2C bus on pins 25 (SDA) and 26 (SCL)
 }
 
 String getDate(const String& timestamp){
     return timestamp.substring(0, 10);
+}
+
+String getClock(const String& timestamp)
+{
+    auto pos = timestamp.indexOf('T') + 1;
+    return timestamp.substring(pos, pos+5);
 }
 
 // function to delete the oldest file on the SD card
@@ -107,7 +114,7 @@ String* read_file_list() {
     while ((entry = root.openNextFile()) && count < 50) {
         if (!entry.isDirectory()) {
             String name = entry.name();
-            if (!name.startsWith("._")) {
+            if (!name.startsWith("._") && !name.endsWith(".jpg")) {
                 fileNames[count++] = name;
             }
         }

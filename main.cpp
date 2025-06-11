@@ -1,9 +1,24 @@
 #include <Arduino.h>
 #include "PulseOxy.h"
 #include "BLEPlx.h"
+
 #include "MotionSensor.h"
 #include "sdCard.h"
 #include <Wire.h>
+
+#include <Arduino.h>
+#include "PulseOxy.h"
+#include "BLEPlx.h"
+#include "MotionSensor.h"
+#include "sdCard.h"
+#include "GUI_Controller.h"
+#include "InputController.h"
+#include <Wire.h>
+
+#define BLE_TIMEOUT 5000 //Timeout for sending live data through BLE
+#define SD_TIMEOUT 10000 //Timeout for saving data on SD
+#define BT_SEND_TIMEOUT 60000 //Timeout for sending files through BLE
+
 
 #define BLE_TIMEOUT 5000 //Timeout for sending live data through BLE
 #define SD_TIMEOUT 10000 //Timeout for saving data on SD
@@ -25,6 +40,10 @@ bool inSession = false; // True is the user is in a training session
 
 TaskHandle_t motionTaskHandle = nullptr;
 TaskHandle_t pulseTaskHandle = nullptr;
+
+// global GUI controller and ninput controller
+GUI_Controller GUI{};
+InputController input{};
 
 // Detect button presses
 //Used for staring and ending workout
@@ -90,6 +109,9 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     SD_setup();
+    GUI.init();
+    GUI.draw_startup();
+    input.init();
     Wire.begin(21, 22);
     initPulseOxy();
     initMotion();
@@ -120,7 +142,7 @@ void setup() {
 
 
 void loop() {
-
+    unsigned long now = millis();
 
     ///
     ///TODO:
@@ -128,13 +150,32 @@ void loop() {
     /// If fall_detected is true, play sound untill button pressed
     /// Add GUI
     ///
+    
+    // handle the inputs for the GUI
+    static unsigned long idle_timer = 0;
+    if (input.L_pressed())
+    {
+        idle_timer = millis();
+        GUI.select_button();
+    }
+    else if (input.R_pressed())
+    {
+        idle_timer = millis();
+        GUI.execute_button();
+    }
+    if (now - idle_timer > 5000)
+    {
+        GUI.go_idle();
+    }
 
+    GUI.draw();
 
     static unsigned long lastNotifyTime = 0; //Last time BLE notify
     static unsigned long lastSDRecord = 0; //Last SD-card write
     static unsigned long lastSendTry = 0; //Last BLE file transfer attempt
-    String today = getDate(get_timestamp());
-    unsigned long now = millis();
+    String timestamp = get_timestamp();
+    String today = getDate(timestamp);
+    
 
     //If g_sendInitiated flag is true, try to send the oldest file in SD
     if (g_sendInitiated && now - lastSendTry >= BT_SEND_TIMEOUT) {
@@ -168,7 +209,7 @@ void loop() {
     int steps = getStepCount();
 
     //If button is presses, start or stop session and set send flag true if needed
-    if (buttonPressed()) {
+    /*if (buttonPressed()) {
         if (inSession) {
             inSession = false;
             Serial.printf("Session ended!");
@@ -177,7 +218,7 @@ void loop() {
             inSession = true;
             Serial.println("Session started!");
         }
-    }
+    }*/
 
     //If pulseTask just finished a read, print
     if (g_pulseUpdated) {
@@ -212,6 +253,9 @@ void loop() {
                       (long) g_hr, (long) g_spo2, steps);
         write_file(g_hr, g_spo2, steps, inSession);
     }
+
+    String clock = getClock(timestamp);
+    GUI.update_values(clock, g_hr, g_spo2, steps);
 
     delay(10);
 }

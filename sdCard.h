@@ -8,7 +8,9 @@ void RTC_setup();
 void SD_setup();
 String get_timestamp();
 
+
 String getDate(const String& timestamp);
+String getClock(const String& timestamp);
 //function to delete the oldest file on the SD card
 void delete_file();
 // Function to return the data in the specific file as a json string
